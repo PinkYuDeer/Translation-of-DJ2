@@ -1,12 +1,14 @@
 name: Build Release
 
-# Package translations and create a GitHub release
 on:
+  schedule:
+    - cron: '0 14 * * *'  # Every day at 14:00 UTC (22:00 CST) check PT for changes
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g. 2.23.1-zh-1)'
-        required: true
+      force:
+        description: '强制发布（跳过变更检测）'
+        type: boolean
+        default: true
 
 jobs:
   release:
@@ -20,22 +22,59 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Pull latest translations from ParaTranz
+      - name: Pull translations from ParaTranz
         env:
           PARATRANZ_TOKEN: ${{ secrets.PARATRANZ_TOKEN }}
         run: |
           python scripts/paratranz_sync.py download
 
-      - name: Update I18nUpdateMod to latest version
+      - name: Check for changes
+        id: diff
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Force release requested"
+          elif git diff --quiet resources/; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No translation changes detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Translation changes detected:"
+            git diff --stat resources/
+          fi
+
+      - name: Update I18nUpdateMod
+        if: steps.diff.outputs.changed == 'true'
         run: |
           python scripts/paratranz_sync.py update-i18n-mod
 
-      - name: Package 汉化压缩包
+      - name: Determine version tag
+        if: steps.diff.outputs.changed == 'true'
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          DJ2_VER=$(cat .last_synced_version | tr -d '[:space:]')
+
+          # Find next zh version number for this DJ2 version
+          EXISTING=$(gh release list --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null | grep "^${DJ2_VER}-zh-" | sed "s/${DJ2_VER}-zh-//" | sort -n | tail -1)
+          if [ -z "$EXISTING" ]; then
+            ZH_VER=1
+          else
+            ZH_VER=$((EXISTING + 1))
+          fi
+
+          TAG="${DJ2_VER}-zh-${ZH_VER}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "dj2_version=${DJ2_VER}" >> $GITHUB_OUTPUT
+          echo "Release tag: ${TAG}"
+
+      - name: Package 汉化压缩包
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
           mkdir -p build-zh/resources build-zh/resourcepacks build-zh/mods
 
-          # 1. PT 同步的翻译文件 (resources/)
           for dir in resources/*/lang; do
             mod=$(basename $(dirname "$dir"))
             if [ -f "$dir/zh_cn.lang" ]; then
@@ -44,28 +83,22 @@ jobs:
             fi
           done
 
-          # 2. 补汉材质包 → 打包为 resourcepack zip
           cd resourcepacks/补汉材质包
-          zip -r "../../build-zh/resourcepacks/DJ2-${VERSION}-补汉材质包-1.12.2.zip" assets/ pack.mcmeta
+          zip -r "../../build-zh/resourcepacks/DJ2-${TAG}-补汉材质包-1.12.2.zip" assets/ pack.mcmeta
           cd ../..
 
-          # 3. 帕秋莉汉化材质包
           cp resourcepacks/帕秋莉汉化材质包-1.12.2.zip build-zh/resourcepacks/
-
-          # 4. i18n mod
           cp mods/I18nUpdateMod-*.jar build-zh/mods/
-
-          # 5. 说明文件
           cp 说明.txt build-zh/
 
-          # 打包
           cd build-zh
-          zip -r "../DJ2-汉化-${VERSION}.zip" .
+          zip -r "../DJ2-汉化-${TAG}.zip" .
           cd ..
 
       - name: Package IGI 配置压缩包
+        if: steps.diff.outputs.changed == 'true'
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
           mkdir -p build-igi/config build-igi/mods
 
           cp -r igi/config/* build-igi/config/
@@ -73,16 +106,28 @@ jobs:
           cp igi/注意事项.txt build-igi/
 
           cd build-igi
-          zip -r "../DJ2-IGI配置-${VERSION}.zip" .
+          zip -r "../DJ2-IGI配置-${TAG}.zip" .
           cd ..
 
+      - name: Commit updated translations
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add resources/ mods/
+          git diff --cached --quiet && exit 0
+          git commit -m "sync: update translations from ParaTranz (${{ steps.version.outputs.tag }})"
+          git push
+
       - name: Create Release
+        if: steps.diff.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: "DJ2 汉化 ${{ github.event.inputs.version }}"
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "DJ2 汉化 ${{ steps.version.outputs.tag }}"
           body: |
-            ## DJ2 汉化补丁 ${{ github.event.inputs.version }}
+            ## DJ2 汉化补丁 ${{ steps.version.outputs.tag }}
+            基于 Divine Journey 2 `${{ steps.version.outputs.dj2_version }}` 版本
 
             ### 汉化压缩包
             包含：resources 翻译文件、补汉材质包、帕秋莉汉化材质包、i18n 自动汉化模组。
@@ -100,5 +145,17 @@ jobs:
             ---
             翻译协作平台：https://paratranz.cn/projects/15018
           files: |
-            DJ2-汉化-${{ github.event.inputs.version }}.zip
-            DJ2-IGI配置-${{ github.event.inputs.version }}.zip
+            DJ2-汉化-${{ steps.version.outputs.tag }}.zip
+            DJ2-IGI配置-${{ steps.version.outputs.tag }}.zip
+
+      - name: Cleanup old releases (keep latest 3)
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[3:] | .[].tagName' | \
+          while read -r tag; do
+            echo "Deleting old release: $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
