@@ -26,6 +26,10 @@ jobs:
         run: |
           python scripts/paratranz_sync.py download
 
+      - name: Update I18nUpdateMod to latest version
+        run: |
+          python scripts/paratranz_sync.py update-i18n-mod
+
       - name: Package 汉化压缩包
         run: |
           VERSION="${{ github.event.inputs.version }}"

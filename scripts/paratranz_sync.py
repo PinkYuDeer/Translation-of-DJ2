@@ -401,6 +401,72 @@ def cmd_update_version(args):
     print(f"Updated version to {args.version}")
 
 
+def cmd_update_i18n_mod(args):
+    """Check and download the latest I18nUpdateMod from CurseForge."""
+    repo_root = Path(__file__).resolve().parent.parent
+    mods_dir = repo_root / "mods"
+    cf_mod_id = 297404  # I18nUpdateMod on CurseForge
+
+    # Get mod info from cfwidget API
+    print("Checking latest I18nUpdateMod version...")
+    url = f"https://api.cfwidget.com/{cf_mod_id}"
+    req = Request(url)
+    req.add_header("User-Agent", "DJ2-Translation-Sync/1.0")
+    with urlopen(req, timeout=30) as resp:
+        mod_data = json.loads(resp.read().decode("utf-8"))
+
+    # Find the latest file that supports 1.12.2
+    latest_file = None
+    for f in mod_data.get("files", []):
+        versions = f.get("versions", [])
+        if "1.12.2" in versions or "1.12" in versions:
+            if latest_file is None or f["id"] > latest_file["id"]:
+                latest_file = f
+            break  # files are already sorted newest first
+
+    if not latest_file:
+        print("No 1.12.2 compatible file found!")
+        sys.exit(1)
+
+    filename = latest_file["name"]
+    file_id = latest_file["id"]
+
+    # Check if we already have this version
+    existing = list(mods_dir.glob("I18nUpdateMod-*.jar")) + list(mods_dir.glob("i18nupdatemod-*.jar"))
+    if existing and existing[0].name == filename:
+        print(f"Already up to date: {filename}")
+        return
+
+    # Build CurseForge CDN download URL
+    # Format: https://edge.forgecdn.net/files/{first4}/{rest}/{filename}
+    id_str = str(file_id)
+    dl_url = f"https://edge.forgecdn.net/files/{id_str[:4]}/{id_str[4:]}/{filename}"
+
+    print(f"Downloading {filename} (id={file_id})...")
+    req = Request(dl_url)
+    req.add_header("User-Agent", "DJ2-Translation-Sync/1.0")
+    with urlopen(req, timeout=60) as resp:
+        jar_data = resp.read()
+
+    # Remove old versions
+    for old in existing:
+        old.unlink()
+        print(f"  Removed old: {old.name}")
+
+    # Save new version
+    new_path = mods_dir / filename
+    new_path.write_bytes(jar_data)
+    print(f"  Saved: {filename} ({len(jar_data)} bytes)")
+
+    # Output for GitHub Actions
+    gh_output = os.environ.get("GITHUB_OUTPUT", "")
+    if gh_output:
+        with open(gh_output, "a") as f:
+            updated = "true" if not existing or existing[0].name != filename else "false"
+            f.write(f"i18n_updated={updated}\n")
+            f.write(f"i18n_version={filename}\n")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -417,6 +483,8 @@ def main():
     p_update = sub.add_parser("update-version", help="Update stored version")
     p_update.add_argument("version", help="Version tag")
 
+    sub.add_parser("update-i18n-mod", help="Update I18nUpdateMod to latest version")
+
     args = parser.parse_args()
     if args.command == "upload":
         cmd_upload(args)
@@ -426,6 +494,8 @@ def main():
         cmd_check_release(args)
     elif args.command == "update-version":
         cmd_update_version(args)
+    elif args.command == "update-i18n-mod":
+        cmd_update_i18n_mod(args)
     else:
         parser.print_help()
         sys.exit(1)
