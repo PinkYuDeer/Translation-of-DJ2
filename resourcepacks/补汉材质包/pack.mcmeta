@@ -1,0 +1,10 @@
+{
+    "pack": {
+        "pack_format": 3,
+        "description": "§6§n含80%人工翻译数据§0-§2§o行数：§c§l1054  §5§n由工具生成§0-§9§o来源于b站up：§b§l柠娜  §9§o版本：§c§l1.12.2",
+        "supported_formats": {
+            "min_inclusive": 1,
+            "max_inclusive": 100
+        }
+    }
+}

@@ -1,0 +1,5 @@
+bqtweaker.key.pageback=上一页
+bqtweaker.notification.enabled=任务完成通知: On
+bqtweaker.notification.disabled=任务完成通知: Off
+bqtweaker.notification.tooltip=切换任务通知
+bqtweaker.context.task=添加任务

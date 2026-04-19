@@ -1,0 +1,61 @@
+name: Sync to ParaTranz
+
+# Triggered when DJ2 releases a new version (checked daily) or manually
+on:
+  schedule:
+    - cron: '0 12 * * *'  # Every day at 12:00 UTC (20:00 CST)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'DJ2 version tag to sync (leave empty for latest)'
+        required: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check for new release
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            python scripts/paratranz_sync.py check-release
+          fi
+
+      - name: Upload to ParaTranz
+        if: steps.check.outputs.new_release == 'true'
+        env:
+          PARATRANZ_TOKEN: ${{ secrets.PARATRANZ_TOKEN }}
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          echo "Syncing DJ2 $VERSION to ParaTranz..."
+          python scripts/paratranz_sync.py upload --version "$VERSION"
+
+      - name: Update synced version
+        if: steps.check.outputs.new_release == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          python scripts/paratranz_sync.py update-version "$VERSION"
+
+      - name: Commit version update
+        if: steps.check.outputs.new_release == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last_synced_version resources/*/lang/en_us.lang
+          git diff --cached --quiet && exit 0
+          git commit -m "sync: update en_US from DJ2 $VERSION"
+          git push

@@ -1,0 +1,15 @@
+enderio.power.symbol=微I
+enderio.top.range.header.post=范围
+enderio.top.machine.side.post=侧面
+enderio.top.machine.ioMode.post=输入/输出模式
+enderio.top.channel.send.post=发送
+enderio.top.channel.recv.post=接收
+enderio.top.redstone.header.post=红石
+enderio.top.suffix.rf=\u0020微I
+enderio.top.tank.content.pre=容量:
+enderio.top.tank.content.post=\u0020毫升
+enderio.top.tank.header.input.post=输入
+enderio.top.tank.header.output.post=输出
+enderio.top.tank.header.storage.post=存储
+subtitles.entity.enderman.teleport=末影人:传送
+container.chestDouble=大型箱子

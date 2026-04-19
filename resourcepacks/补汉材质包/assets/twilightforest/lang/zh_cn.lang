@@ -1,0 +1,9 @@
+tile.twilightforest.BossSpawner.9.name=最终Boss刷怪笼
+tile.twilightforest.StonePillar.name=石柱
+tile.twilightforest.StonePillarThin.name=细石柱
+entity.twilightforest.harbinger_cube.name=噩兆立方
+entity.twilightforest.roving_cube.name=悬浮立方
+twilightforest.config.uncrafting_whitelist=将拆解列表设置为白名单
+twilightforest.config.uncrafting_whitelist.tooltip=将拆解检查列表设置为白名单.默认是黑名单.
+twilightforest.config.uncrafting_list=拆解列表
+twilightforest.config.uncrafting_list.tooltip=用于黑名单或白名单配方的拆解列表.

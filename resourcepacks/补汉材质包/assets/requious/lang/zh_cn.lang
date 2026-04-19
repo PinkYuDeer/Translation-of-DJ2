@@ -1,0 +1,9 @@
+requious.duration.ticks=%s 刻
+requious.duration.seconds=%s 秒
+requious.duration.minutes=%s 分钟
+requious.duration.hours=%s 小时
+requious.duration.instant=即时
+requious.fluid=%1$s %2$s/%3$s 毫升
+requious.fluid.empty=空
+requious.text.test=我已经存活了 %s 个刻
+requious.text.owner=所有者为 %s

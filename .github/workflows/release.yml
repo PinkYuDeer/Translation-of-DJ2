@@ -1,0 +1,100 @@
+name: Build Release
+
+# Package translations and create a GitHub release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 2.23.1-zh-1)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Pull latest translations from ParaTranz
+        env:
+          PARATRANZ_TOKEN: ${{ secrets.PARATRANZ_TOKEN }}
+        run: |
+          python scripts/paratranz_sync.py download
+
+      - name: Package 汉化压缩包
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mkdir -p build-zh/resources build-zh/resourcepacks build-zh/mods
+
+          # 1. PT 同步的翻译文件 (resources/)
+          for dir in resources/*/lang; do
+            mod=$(basename $(dirname "$dir"))
+            if [ -f "$dir/zh_cn.lang" ]; then
+              mkdir -p "build-zh/resources/$mod/lang"
+              cp "$dir/zh_cn.lang" "build-zh/resources/$mod/lang/"
+            fi
+          done
+
+          # 2. 补汉材质包 → 打包为 resourcepack zip
+          cd resourcepacks/补汉材质包
+          zip -r "../../build-zh/resourcepacks/DJ2-${VERSION}-补汉材质包-1.12.2.zip" assets/ pack.mcmeta
+          cd ../..
+
+          # 3. 帕秋莉汉化材质包
+          cp resourcepacks/帕秋莉汉化材质包-1.12.2.zip build-zh/resourcepacks/
+
+          # 4. i18n mod
+          cp mods/I18nUpdateMod-*.jar build-zh/mods/
+
+          # 5. 说明文件
+          cp 说明.txt build-zh/
+
+          # 打包
+          cd build-zh
+          zip -r "../DJ2-汉化-${VERSION}.zip" .
+          cd ..
+
+      - name: Package IGI 配置压缩包
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mkdir -p build-igi/config build-igi/mods
+
+          cp -r igi/config/* build-igi/config/
+          cp igi/mods/* build-igi/mods/
+          cp igi/注意事项.txt build-igi/
+
+          cd build-igi
+          zip -r "../DJ2-IGI配置-${VERSION}.zip" .
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: "DJ2 汉化 ${{ github.event.inputs.version }}"
+          body: |
+            ## DJ2 汉化补丁 ${{ github.event.inputs.version }}
+
+            ### 汉化压缩包
+            包含：resources 翻译文件、补汉材质包、帕秋莉汉化材质包、i18n 自动汉化模组。
+
+            使用方法：
+            1. 解压到游戏整合包版本文件夹覆盖
+            2. 进入游戏加载补汉材质包（放在 i18n 材质包下面）
+            3. 加载帕秋莉汉化材质包
+
+            ### IGI 配置压缩包
+            InGameInfo 屏幕信息显示配置，包含血魔法、RF维度、神秘扭曲等显示。
+
+            使用方法：解压到整合包目录覆盖。
+
+            ---
+            翻译协作平台：https://paratranz.cn/projects/15018
+          files: |
+            DJ2-汉化-${{ github.event.inputs.version }}.zip
+            DJ2-IGI配置-${{ github.event.inputs.version }}.zip

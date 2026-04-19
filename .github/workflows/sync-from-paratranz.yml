@@ -1,0 +1,36 @@
+name: Sync from ParaTranz
+
+# Pull latest translations from ParaTranz and create a PR
+on:
+  schedule:
+    - cron: '0 14 * * *'  # Every day at 14:00 UTC (22:00 CST)
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download from ParaTranz
+        env:
+          PARATRANZ_TOKEN: ${{ secrets.PARATRANZ_TOKEN }}
+        run: |
+          python scripts/paratranz_sync.py download
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "sync: update zh_CN translations from ParaTranz"
+          title: "Sync translations from ParaTranz"
+          body: |
+            Automated pull of latest translations from [ParaTranz](https://paratranz.cn/projects/15018).
+          branch: sync/paratranz-translations
+          delete-branch: true
