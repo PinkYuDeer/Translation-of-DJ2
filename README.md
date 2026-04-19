@@ -2,7 +2,7 @@
 
 Divine Journey 2 简体中文汉化同步仓库。
 
-汉化作者：柠娜、PinkYuDeer
+汉化作者：[琅然_](https://space.bilibili.com/356528)、PinkYuDeer、[柠娜](https://space.bilibili.com/383989569)
 
 ## 下载
 
