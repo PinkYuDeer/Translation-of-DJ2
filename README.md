@@ -12,7 +12,7 @@ Divine Journey 2 简体中文汉化同步仓库。
 
 | 文件 | 内容 |
 |------|------|
-| **DJ2-汉化-x.xx.x-zh-x.zip** | resources 翻译、补汉材质包、帕秋莉汉化材质包、i18n 自动汉化模组 |
+| **DJ2-汉化-x.xx.x-zh-x.zip** | resources 翻译、资源包补丁、i18n 自动汉化模组 |
 | **DJ2-IGI配置-x.xx.x-zh-x.zip** | InGameInfo 屏幕信息显示（血魔法、RF维度、神秘扭曲等） |
 
 ## 安装方法
@@ -21,8 +21,7 @@ Divine Journey 2 简体中文汉化同步仓库。
 
 1. 解压汉化压缩包，将文件夹覆盖到游戏整合包版本目录
 2. 自行下载 i18n 自动汉化模组（压缩包内已附带）
-3. 进入游戏 → 资源包界面 → 加载补汉材质包（放在 i18n 材质包**下面**）
-4. 加载帕秋莉汉化材质包
+3. 进入游戏 → 资源包界面 → 加载资源包（补汉材质包放在 i18n 材质包**下面**）
 
 ### IGI 配置
 
@@ -66,9 +65,7 @@ sync-to-paratranz ── 下载 en_US 原文 → 上传到 ParaTranz
 │   ├── enchantment_descriptions/
 │   ├── groovy/             #   GroovyScript
 │   └── requious_frakto/
-├── resourcepacks/
-│   ├── 补汉材质包/          # 50 个模组的补充汉化 (手动维护)
-│   └── 帕秋莉汉化材质包-1.12.2.zip
+├── resourcepacks/           # 资源包 zip (手动上传，release 时打包其中所有 *.zip)
 ├── mods/                   # i18n 自动汉化模组 (release 时自动更新)
 ├── igi/                    # IGI 配置和模组 (手动维护)
 ├── scripts/                # 同步脚本

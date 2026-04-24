@@ -1,9 +1,0 @@
-@eInfusing bonus=提高电源生成和
-@aContents=%s堆叠
-@2Scan id=扫描 ID:%s
-@aArea=半径 %s (在 %s 和 %s 之间)
-@aDelay=延迟:%s
-@aCounter=计数:%s
-@aCurrent=当前:%s
-@aMode=模式:%s
-@aBits=位数:%s

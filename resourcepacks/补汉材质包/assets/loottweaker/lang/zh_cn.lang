@@ -1,7 +1,0 @@
-loottweaker.commands.dump.all.exception=在转储%s时出现意外错误.请查看游戏日志获取详细信息.
-loottweaker.messages.info.locatingLootTables=正在查找所有现有的战利品表.这可能需要几秒钟.
-loottweaker.config.warnings.category=警告
-loottweaker.config.warnings.deprecation=弃用警告
-loottweaker.config.warnings.newTableMinecraftNamespace=newTable() Minecraft 命名空间
-loottweaker.config.workarounds.category=解决方法
-loottweaker.config.workarounds.forceInitClasses=需要强制初始化的类

@@ -1,4 +1,0 @@
-operator.operators.integratedderivative.arithmetic.name=算术
-operator.operators.integratedderivative.arithmetic.pow.name=幂
-operator.operators.integratedderivative.arithmetic.basename=积分导数 - %s
-tooltip.omni_duplicate.name=复制第一个具有通道的连接器的组

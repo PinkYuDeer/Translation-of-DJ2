@@ -9,6 +9,9 @@ on:
         description: '强制发布（跳过变更检测）'
         type: boolean
         default: true
+      version:
+        description: 'DJ2 版本号（留空则使用 .last_synced_version）'
+        required: false
 
 jobs:
   release:
@@ -28,25 +31,48 @@ jobs:
         run: |
           python scripts/paratranz_sync.py download
 
-      - name: Check for changes
+      - name: Update I18nUpdateMod
+        run: |
+          python scripts/paratranz_sync.py update-i18n-mod
+
+      - name: Compute current build hash
+        run: |
+          {
+            find resources -type f -name 'zh_cn.lang' -print0 | sort -z | xargs -0 -r sha256sum
+            find mods -type f -name '*.jar' -print0 | sort -z | xargs -0 -r sha256sum
+            find resourcepacks -type f -print0 | sort -z | xargs -0 -r sha256sum
+            find igi -type f -print0 | sort -z | xargs -0 -r sha256sum
+            [ -f 说明.txt ] && sha256sum 说明.txt
+          } > current-build.sha256
+          echo "Current manifest ($(wc -l < current-build.sha256) files):"
+          head -5 current-build.sha256
+
+      - name: Restore last-build hash cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .last-build.sha256
+          key: release-build-hash-
+          restore-keys: |
+            release-build-hash-
+
+      - name: Compare with last build
         id: diff
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "Force release requested"
-          elif git diff --quiet resources/; then
+          elif [ -f .last-build.sha256 ] && cmp -s current-build.sha256 .last-build.sha256; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No translation changes detected"
+            echo "No build changes since last release — skipping."
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Translation changes detected:"
-            git diff --stat resources/
+            if [ -f .last-build.sha256 ]; then
+              echo "Build changes detected since last release:"
+              diff .last-build.sha256 current-build.sha256 || true
+            else
+              echo "No prior build cache found — first release."
+            fi
           fi
-
-      - name: Update I18nUpdateMod
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          python scripts/paratranz_sync.py update-i18n-mod
 
       - name: Determine version tag
         if: steps.diff.outputs.changed == 'true'
@@ -54,7 +80,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DJ2_VER=$(cat .last_synced_version | tr -d '[:space:]')
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            DJ2_VER="${{ github.event.inputs.version }}"
+            echo "Using manually provided version: ${DJ2_VER}"
+          else
+            DJ2_VER=$(cat .last_synced_version | tr -d '[:space:]')
+            echo "Using .last_synced_version: ${DJ2_VER}"
+          fi
 
           # Find next zh version number for this DJ2 version
           EXISTING=$(gh release list --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null | grep "^${DJ2_VER}-zh-" | sed "s/${DJ2_VER}-zh-//" | sort -n | tail -1)
@@ -83,11 +115,17 @@ jobs:
             fi
           done
 
-          cd resourcepacks/补汉材质包
-          zip -r "../../build-zh/resourcepacks/DJ2-${TAG}-补汉材质包-1.12.2.zip" assets/ pack.mcmeta
-          cd ../..
+          shopt -s nullglob
+          zips=(resourcepacks/*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "Error: no .zip files found in resourcepacks/ — manually upload at least one." >&2
+            exit 1
+          fi
+          for z in "${zips[@]}"; do
+            cp "$z" build-zh/resourcepacks/
+            echo "  included: $(basename "$z")"
+          done
 
-          cp resourcepacks/帕秋莉汉化材质包-1.12.2.zip build-zh/resourcepacks/
           cp mods/I18nUpdateMod-*.jar build-zh/mods/
           cp 说明.txt build-zh/
 
@@ -109,16 +147,6 @@ jobs:
           zip -r "../DJ2-IGI配置-${TAG}.zip" .
           cd ..
 
-      - name: Commit updated translations
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add resources/ mods/
-          git diff --cached --quiet && exit 0
-          git commit -m "sync: update translations from ParaTranz (${{ steps.version.outputs.tag }})"
-          git push
-
       - name: Create Release
         if: steps.diff.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
@@ -130,12 +158,11 @@ jobs:
             基于 Divine Journey 2 `${{ steps.version.outputs.dj2_version }}` 版本
 
             ### 汉化压缩包
-            包含：resources 翻译文件、补汉材质包、帕秋莉汉化材质包、i18n 自动汉化模组。
+            包含：resources 翻译文件、资源包补丁、i18n 自动汉化模组。
 
             使用方法：
             1. 解压到游戏整合包版本文件夹覆盖
-            2. 进入游戏加载补汉材质包（放在 i18n 材质包下面）
-            3. 加载帕秋莉汉化材质包
+            2. 进入游戏加载资源包（补汉材质包放在 i18n 材质包下面）
 
             ### IGI 配置压缩包
             InGameInfo 屏幕信息显示配置，包含血魔法、RF维度、神秘扭曲等显示。
@@ -147,6 +174,17 @@ jobs:
           files: |
             DJ2-汉化-${{ steps.version.outputs.tag }}.zip
             DJ2-IGI配置-${{ steps.version.outputs.tag }}.zip
+
+      - name: Save build hash to cache
+        if: steps.diff.outputs.changed == 'true'
+        run: cp current-build.sha256 .last-build.sha256
+
+      - name: Persist last-build hash cache
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .last-build.sha256
+          key: release-build-hash-${{ github.run_id }}
 
       - name: Cleanup old releases (keep latest 3)
         if: steps.diff.outputs.changed == 'true'
