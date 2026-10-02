@@ -19,4 +19,7 @@ jobs:
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Validate shipped resource packs
-        run: python scripts/prepare_resourcepacks.py --check
+        run: |
+          cp -r resourcepacks "$RUNNER_TEMP/dj2-resourcepacks"
+          python scripts/prepare_resourcepacks.py "$RUNNER_TEMP/dj2-resourcepacks"
+          python scripts/prepare_resourcepacks.py --check "$RUNNER_TEMP/dj2-resourcepacks"

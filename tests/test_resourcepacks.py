@@ -135,12 +135,15 @@ class ResourcePackTests(unittest.TestCase):
         self.path.write_bytes(self.path.read_bytes().replace(b"original payload", b"modified payload"))
         self.assert_invalid_unchanged()
 
-    def test_repository_packs_are_ready_to_load(self):
+    def test_repository_packs_can_be_prepared(self):
         packs = list((ROOT / "resourcepacks").glob("*.zip"))
         self.assertTrue(packs)
         for path in packs:
             with self.subTest(path=path):
-                self.assertFalse(resourcepacks.prepare_resourcepack(path, check_only=True))
+                prepared_path = Path(self.directory.name) / path.name
+                prepared_path.write_bytes(path.read_bytes())
+                resourcepacks.prepare_resourcepack(prepared_path)
+                self.assertFalse(resourcepacks.prepare_resourcepack(prepared_path, check_only=True))
 
 
 if __name__ == "__main__":
