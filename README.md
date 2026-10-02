@@ -55,6 +55,19 @@ sync-to-paratranz ── 下载 en_US 原文 → 上传到 ParaTranz
 | Sync to ParaTranz | 每天定时 + 手动 | 检测 DJ2 新版本，上传原文到 ParaTranz |
 | Build Release | 每天定时 + 手动 | 嗅探 ParaTranz 翻译更新，自动打包发布 |
 
+手动运行 **Build Release** 时勾选 `dry_run` 可仅验证完整构建，生成的两个压缩包可在 Actions 的 `dj2-release-preview` 产物中下载；试构建不会发布 Release、更新发布缓存或清理旧版本。
+
+若拉取翻译返回 `401 Unauthorized`，请在 ParaTranz 个人资料设置中重新获取 API Token，并更新本仓库的 Actions secret `PARATRANZ_TOKEN`。`403` 则需检查 Token 所属账号的项目成员权限。脚本接受原始 Token 或带 `Bearer ` 前缀的值。
+
+上传资源包时，应使 `pack.mcmeta` 和 `assets/` 位于 ZIP 根目录，并使用 Minecraft 1.12.2 的 `pack_format: 3`。构建会自动移除单一外层目录并校验资源包；缺少元数据、多个资源包根目录或损坏的 ZIP 会终止构建。
+
+本地检查：
+
+```sh
+python -m unittest discover -s tests -v
+python scripts/prepare_resourcepacks.py --check
+```
+
 ## 仓库结构
 
 ```

@@ -112,11 +112,21 @@ def build_lang(entries: dict[str, str], original_content: str = "") -> str:
 
 
 def get_token() -> str:
-    token = os.environ.get("PARATRANZ_TOKEN", "")
+    token = os.environ.get("PARATRANZ_TOKEN", "").strip()
     if not token:
         print("Error: PARATRANZ_TOKEN environment variable not set", file=sys.stderr)
         sys.exit(1)
     return token
+
+
+def authorization_header(token: str) -> str:
+    """Use the Bearer scheme required by the current ParaTranz API."""
+    token = token.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    if not token:
+        raise ValueError("PARATRANZ_TOKEN is empty")
+    return f"Bearer {token}"
 
 
 def api_request(method: str, path: str, token: str, data=None, files=None,
@@ -147,7 +157,7 @@ def api_request(method: str, path: str, token: str, data=None, files=None,
             else:
                 req = Request(url, method=method)
 
-            req.add_header("Authorization", token)
+            req.add_header("Authorization", authorization_header(token))
 
             with urlopen(req, timeout=60) as resp:
                 resp_body = resp.read().decode("utf-8")
@@ -156,7 +166,7 @@ def api_request(method: str, path: str, token: str, data=None, files=None,
                 return None
 
         except HTTPError as e:
-            if e.code == 429:
+            if e.code == 429 and attempt < retry - 1:
                 wait = min(2 ** attempt * 5, 60)
                 print(f"  Rate limited, waiting {wait}s...", file=sys.stderr)
                 time.sleep(wait)
@@ -164,7 +174,16 @@ def api_request(method: str, path: str, token: str, data=None, files=None,
             if e.code >= 500 and attempt < retry - 1:
                 time.sleep(2 ** attempt)
                 continue
-            print(f"  API error {e.code}: {e.read().decode()}", file=sys.stderr)
+            if e.code == 401:
+                print("  ParaTranz authentication failed (401). Renew PARATRANZ_TOKEN "
+                      "in the repository Actions secrets using the token from your "
+                      "ParaTranz profile settings.", file=sys.stderr)
+            elif e.code == 403:
+                print("  ParaTranz access denied (403). Check that the token owner "
+                      f"is a member of project {PROJECT_ID} with the required permissions.",
+                      file=sys.stderr)
+            else:
+                print(f"  API error {e.code} for {method} {path}", file=sys.stderr)
             raise
         except Exception as e:
             if attempt < retry - 1:

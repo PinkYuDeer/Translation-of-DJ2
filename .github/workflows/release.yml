@@ -12,6 +12,17 @@ on:
       version:
         description: 'DJ2 版本号（留空则使用 .last_synced_version）'
         required: false
+      dry_run:
+        description: '仅验证构建并上传产物，不发布 Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -31,6 +42,9 @@ jobs:
         run: |
           python scripts/paratranz_sync.py download
 
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
+
       - name: Update I18nUpdateMod
         run: |
           python scripts/paratranz_sync.py update-i18n-mod
@@ -42,6 +56,7 @@ jobs:
             find mods -type f -name '*.jar' -print0 | sort -z | xargs -0 -r sha256sum
             find resourcepacks -type f -print0 | sort -z | xargs -0 -r sha256sum
             find igi -type f -print0 | sort -z | xargs -0 -r sha256sum
+            sha256sum .last_synced_version .github/workflows/release.yml scripts/*.py
             [ -f 说明.txt ] && sha256sum 说明.txt
           } > current-build.sha256
           echo "Current manifest ($(wc -l < current-build.sha256) files):"
@@ -79,9 +94,10 @@ jobs:
         id: version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            DJ2_VER="${{ github.event.inputs.version }}"
+          if [ -n "$REQUESTED_VERSION" ]; then
+            DJ2_VER="$REQUESTED_VERSION"
             echo "Using manually provided version: ${DJ2_VER}"
           else
             DJ2_VER=$(cat .last_synced_version | tr -d '[:space:]')
@@ -89,12 +105,8 @@ jobs:
           fi
 
           # Find next zh version number for this DJ2 version
-          EXISTING=$(gh release list --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null | grep "^${DJ2_VER}-zh-" | sed "s/${DJ2_VER}-zh-//" | sort -n | tail -1)
-          if [ -z "$EXISTING" ]; then
-            ZH_VER=1
-          else
-            ZH_VER=$((EXISTING + 1))
-          fi
+          gh release list --limit 100 --json tagName > release-tags.json
+          ZH_VER=$(python -c 'import json, sys; prefix = sys.argv[1] + "-zh-"; tags = json.load(open("release-tags.json")); versions = [int(t["tagName"][len(prefix):]) for t in tags if t["tagName"].startswith(prefix) and t["tagName"][len(prefix):].isdigit()]; print(max(versions, default=0) + 1)' "$DJ2_VER")
 
           TAG="${DJ2_VER}-zh-${ZH_VER}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -125,6 +137,8 @@ jobs:
             cp "$z" build-zh/resourcepacks/
             echo "  included: $(basename "$z")"
           done
+          python scripts/prepare_resourcepacks.py build-zh/resourcepacks
+          python scripts/prepare_resourcepacks.py --check build-zh/resourcepacks
 
           cp mods/I18nUpdateMod-*.jar build-zh/mods/
           cp 说明.txt build-zh/
@@ -148,7 +162,7 @@ jobs:
           cd ..
 
       - name: Create Release
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && !inputs.dry_run
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -175,19 +189,27 @@ jobs:
             DJ2-汉化-${{ steps.version.outputs.tag }}.zip
             DJ2-IGI配置-${{ steps.version.outputs.tag }}.zip
 
+      - name: Upload dry-run packages
+        if: steps.diff.outputs.changed == 'true' && inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: dj2-release-preview
+          path: DJ2-*-${{ steps.version.outputs.tag }}.zip
+          if-no-files-found: error
+
       - name: Save build hash to cache
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && !inputs.dry_run
         run: cp current-build.sha256 .last-build.sha256
 
       - name: Persist last-build hash cache
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && !inputs.dry_run
         uses: actions/cache/save@v4
         with:
           path: .last-build.sha256
           key: release-build-hash-${{ github.run_id }}
 
       - name: Cleanup old releases (keep latest 3)
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && !inputs.dry_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
